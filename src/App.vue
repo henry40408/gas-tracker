@@ -1,30 +1,83 @@
-<script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
-</script>
-
 <template>
-  <div>
-    <a href="https://vitejs.dev" target="_blank">
-      <img src="/vite.svg" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://vuejs.org/" target="_blank">
-      <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-    </a>
-  </div>
-  <HelloWorld msg="Vite + Vue" />
+  <main>
+    <div class="hero">
+      <h1>{{ toFixed(gwei, 4) }} gwei</h1>
+      <p>updated @ {{ updatedAt ? formatISO(updatedAt) : "" }}</p>
+      <p>update in {{ countdown }}s</p>
+    </div>
+    <h2>Ethereum Gas Tracker</h2>
+    <p>
+      Unlike
+      <a
+        href="https://etherscan.io/gastracker"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Etherscan</a
+      >, this Ethereum Gas Tracker directly retrieves gas prices through
+      <a
+        herf="https://ethereum.github.io/execution-apis/api-documentation/"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Ethereum's JSON-RPC interface</a
+      >, provided by
+      <a
+        href="https://developers.cloudflare.com/web3/ethereum-gateway/"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Cloudflare</a
+      >. It doesn't require an access token and is a static website that can be
+      deployed anywhere. The gas price will be updated in the webpage's title
+      bar every {{ interval }} seconds, allowing users to keep it open in the
+      background as an indicator.
+    </p>
+  </main>
 </template>
 
+<script setup lang="ts">
+import { useInterval, useIntervalFn, useTitle } from "@vueuse/core";
+import { formatISO, secondsToMilliseconds } from "date-fns";
+import { Decimal } from "decimal.js";
+import { computed, onMounted, ref } from "vue";
+
+const wei = ref<null | Decimal>(null);
+const gwei = computed(() => (wei.value ? wei.value.div(10 ** 9) : null));
+
+const updatedAt = ref<null | Date>();
+const title = computed(
+  () => `${toFixed(gwei.value, 2)} | Ethereum gas tracker`,
+);
+useTitle(title);
+
+function toFixed(n: null | Decimal, m: number) {
+  return n ? n.toFixed(m) : null;
+}
+
+const endpoint = "https://cloudflare-eth.com";
+async function refreshGasPrice() {
+  const body = {
+    jsonrpc: "2.0",
+    method: "eth_gasPrice",
+    params: [],
+    id: 0,
+  };
+  const json = await fetch(endpoint, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }).then((r) => r.json());
+  wei.value = new Decimal(json.result);
+  updatedAt.value = new Date();
+}
+
+const interval = 15;
+useIntervalFn(() => refreshGasPrice(), secondsToMilliseconds(interval));
+const counter = useInterval(secondsToMilliseconds(1));
+const countdown = computed(() => interval - (counter.value % interval));
+
+onMounted(() => refreshGasPrice());
+</script>
+
 <style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
+.hero {
+  text-align: center;
 }
 </style>
