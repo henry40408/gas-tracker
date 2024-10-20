@@ -1,6 +1,8 @@
-name: Deploy to GitHub Pages
+name: CI/CD Pipeline
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 jobs:
@@ -23,6 +25,7 @@ jobs:
       - name: Build
         run: npm run build
       - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: JamesIves/github-pages-deploy-action@v4.6.3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
