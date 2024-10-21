@@ -1,7 +1,9 @@
 <template>
   <main>
     <div class="hero">
-      <h1>{{ toFixed(gwei, 4) }} gwei</h1>
+      <h1 v-if="pending">...</h1>
+      <h1 v-else>{{ toFixed(gwei, 4) }} gwei</h1>
+      <div v-if="error">{{ error }}</div>
       <p>updated @ {{ updatedAt ? formatISO(updatedAt) : "" }}</p>
       <p>update in {{ countdown }}s</p>
     </div>
@@ -34,11 +36,13 @@
 </template>
 
 <script setup lang="ts">
-import { useInterval, useIntervalFn, useTitle } from "@vueuse/core";
+import { useInterval, useTitle } from "@vueuse/core";
 import { formatISO, secondsToMilliseconds } from "date-fns";
 import { Decimal } from "decimal.js";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 
+const pending = ref(false);
+const error = ref<null | unknown>(null);
 const wei = ref<null | Decimal>(null);
 const gwei = computed(() => (wei.value ? wei.value.div(10 ** 9) : null));
 
@@ -54,23 +58,38 @@ function toFixed(n: null | Decimal, m: number) {
 
 const endpoint = "https://cloudflare-eth.com";
 async function refreshGasPrice() {
-  const body = {
-    jsonrpc: "2.0",
-    method: "eth_gasPrice",
-    params: [],
-    id: 0,
-  };
-  const json = await fetch(endpoint, {
-    method: "POST",
-    body: JSON.stringify(body),
-  }).then((r) => r.json());
-  wei.value = new Decimal(json.result);
-  updatedAt.value = new Date();
+  try {
+    error.value = null;
+    pending.value = true;
+    const body = {
+      jsonrpc: "2.0",
+      method: "eth_gasPrice",
+      params: [],
+      id: 0,
+    };
+    const json = await fetch(endpoint, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }).then((r) => r.json());
+    wei.value = new Decimal(json.result);
+    updatedAt.value = new Date();
+  } catch (err) {
+    console.error(err);
+    error.value = err;
+  } finally {
+    pending.value = false;
+  }
 }
 
 const interval = 15;
-useIntervalFn(() => refreshGasPrice(), secondsToMilliseconds(interval));
 const counter = useInterval(secondsToMilliseconds(1));
+watch(
+  () => counter.value,
+  () => {
+    if (counter.value % interval !== 0) return;
+    refreshGasPrice();
+  },
+);
 const countdown = computed(() => interval - (counter.value % interval));
 
 onMounted(() => refreshGasPrice());
